@@ -1,6 +1,9 @@
 # How to Ride a Dragon VR
 Dragon VR code for Children's Museum of Jordan
 
+# This is for 5.6.x builds.
+If you have a fix for any other unity version, please branch off of master and create a specific branch for that version like unity_[version]
+
 # Setup Steps:
 
 ## Wifi Router Setup
