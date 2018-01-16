@@ -5,9 +5,18 @@
 using System.Collections;
 using UnityEngine;
 using SocketIO;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
+using System.Text;
+using System;
 
 public class JoystickDragonController : MonoBehaviour
 {
+	Thread udpReceiveThread;
+	UdpClient udp;
+	public int udpPort = 3334; 
+
 	// private SocketIOComponent socket;
 
 	private Animator animator;
@@ -49,6 +58,18 @@ public class JoystickDragonController : MonoBehaviour
 	private float lastFlyX = 0.0f;
 	private float lastFlyY = 0.0f;
 
+	public float maxForwardSpeed = 100.0F;
+	public float maxTurnSpeed = 25.0F;
+
+	private Vector3 turnVector;
+
+	public bool useJoystickReins = false;
+
+	private float udpLeftRein = 0.0F;
+	private float udpRightRein = 0.0F;
+	private float udpPitch = 0.0F;
+
+
 	AudioSource flapping;
 
 	public void Start() 
@@ -58,6 +79,13 @@ public class JoystickDragonController : MonoBehaviour
 		// socket = go.GetComponent<SocketIOComponent>();
 		animator = GetComponent<Animator> ();
 		flapping = GetComponent<AudioSource> ();
+
+		turnVector = transform.eulerAngles;
+
+		udpReceiveThread = new Thread (new ThreadStart (UdpReceive));
+		udpReceiveThread.IsBackground = true;
+		udpReceiveThread.Start ();
+
 
 
 		////////// MOVEMENT USING EULER AND COROUTINES  //////////
@@ -430,7 +458,7 @@ public class JoystickDragonController : MonoBehaviour
 	
 	//// END OF USING EULER ANGLES ////
 
-	public void Update(){
+	public void XXXUpdate(){
 		// start/stop flying on button click
 
 		// done this so you can project another comp on a big screen
@@ -447,6 +475,13 @@ public class JoystickDragonController : MonoBehaviour
 			
 		float flyX = Input.GetAxis ("FlyAxisX");
 		float flyY = Input.GetAxis ("FlyAxisY");
+
+		float leftRein = 100.0F - (Input.GetAxis ("LeftJoystickVertical") * 100.0F);
+		leftRein = Mathf.Round(Mathf.Clamp(leftRein, 0.0F, 100.0F));
+
+		float rightRein = 100.0F - (Input.GetAxis ("RightJoystickVertical") * 100.0F);
+		rightRein = Mathf.Round(Mathf.Clamp(rightRein, 0.0F, 100.0F));
+		Debug.Log (leftRein + "," + rightRein);			
 
 		if (flyX > 0) {
 			MoveRightEuler ();
@@ -485,5 +520,80 @@ public class JoystickDragonController : MonoBehaviour
 
 	}
 	
+	public void Update(){
+		float leftRein = 0.0F;
+		float rightRein = 0.0F;
 
+		if (useJoystickReins) {
+			leftRein = 1.0F - Input.GetAxis ("LeftJoystickVertical");
+			leftRein = Mathf.Clamp (leftRein, 0.0F, 1.0F);
+
+			rightRein = 1.0F - Input.GetAxis ("RightJoystickVertical");
+			rightRein = Mathf.Clamp (rightRein, 0.0F, 1.0F);
+			Debug.Log (leftRein + "," + rightRein);			
+		} 
+		else {
+			// use the udp data
+		
+		}
+
+		float forwardPercentage = 0.5F * (leftRein + rightRein);
+		float turnPercentage = (leftRein - rightRein);
+
+		turnVector.x = -udpPitch;
+		turnVector.y = (turnVector.y + turnPercentage * maxTurnSpeed * Time.deltaTime);
+		turnVector.z = 0.0F;
+		transform.eulerAngles = turnVector;
+
+		transform.Translate (Vector3.forward * forwardPercentage * maxForwardSpeed * Time.deltaTime);
+
+
+	}
+
+	void OnApplicationQuit() {
+		if (udpReceiveThread.IsAlive) {
+			udpReceiveThread.Abort();
+		}
+		udp.Close ();
+	}
+
+
+	private void UdpReceive() {
+		udp = new UdpClient(udpPort);
+		while (true) {
+			try {
+				IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
+				byte [] data = udp.Receive(ref anyIP);
+				// decode upd data here
+
+				udpLeftRein = (float)data[3] / 100.0F; 
+				udpRightRein = (float)data[4] / 100.0F; 
+
+				//Int16 tempPitch = ((Int16)(data[7]) << 8) | ((Int16)(data[8]) & (Int16)(0x00ff));
+
+				// Debug.Log(data[7].ToString() + " " + data[8].ToString());
+
+				Int16 tempPitch = (Int16)data[7];
+				//Debug.Log(tempPitch);
+				tempPitch = (Int16)(tempPitch << 8);
+				//Debug.Log(tempPitch);
+				tempPitch = (Int16)(tempPitch | data[8]);
+				//Debug.Log(tempPitch);
+				//Debug.Log("===");
+
+				if (tempPitch != -255) {
+					udpPitch = (float)tempPitch;
+				}
+				else {
+					udpPitch = 0.0F;
+				}
+
+				Debug.Log(udpPitch);
+			
+			}
+			catch (Exception err) {
+				Debug.Log (err.ToString ());
+			}
+		}
+	}
 }
