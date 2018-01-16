@@ -1,0 +1,7 @@
+ESP8266 and MPU6050 Connections
+
+MPU-SCL to  ESP8266-D1
+MPU-SDA to ESP8266-D2 
+MPU-INT to ESP8266-D5
+
+pull-ups on SCL, SDA
